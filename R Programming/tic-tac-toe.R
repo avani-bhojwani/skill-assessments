@@ -38,8 +38,14 @@ update_board_player <- function() {
   row_position <- readLines(con = con, n = 1)
   cat("Which column? ")
   col_position <- readLines(con = con, n = 1)
-  if (is.null(board[row_position, col_position])) {
+  # check if row position or col position entered was empty
+  if (is.null(row_position) | is.null(col_position)) {
     valid_position <- FALSE
+    # check if position entered is outside the range of the board
+    # i.e. not within the 3x3 dataframe
+  } else if (is.null(board[row_position, col_position])) {
+    valid_position <- FALSE
+    # check if position entered is empty on the board
   } else if (board[row_position, col_position] == "[ ]") {
     valid_position <- TRUE
   } else {
@@ -62,7 +68,7 @@ update_board_player <- function() {
     }
   }
 
-  board[row_position, col_position] = player_symbol
+  board[row_position, col_position] <- player_symbol
   Sys.sleep(1)
   cat("-------------\nCurrent Board\n-------------\n")
   print(board)
@@ -71,13 +77,13 @@ update_board_player <- function() {
 }
 
 update_board_comp <- function() {
-  #find which positions on the board are empty
+  # find which positions on the board are empty
   empty_positions <- which(board == "[ ]", arr.ind = TRUE)
-  #choose an random position from the empty positions
-  random_position <- sample(nrow(empty_positions),1)
-  row_position <- empty_positions[random_position,][1]
-  col_position <- empty_positions[random_position,][2]
-  board[row_position, col_position] = comp_symbol
+  # choose an random position from the empty positions
+  random_position <- sample(nrow(empty_positions), 1)
+  row_position <- empty_positions[random_position, ][1]
+  col_position <- empty_positions[random_position, ][2]
+  board[row_position, col_position] <- comp_symbol
   Sys.sleep(1)
   cat("-------------\nCurrent Board\n-------------\n")
   print(board)
@@ -86,42 +92,48 @@ update_board_comp <- function() {
 }
 
 check_winner <- function() {
-  x_win_vector <- c(rep("X",3))
-  o_win_vector <- c(rep("O",3))
+  x_win_vector <- c(rep("X", 3))
+  o_win_vector <- c(rep("O", 3))
   empty_positions <- which(board == "[ ]", arr.ind = TRUE)
-  
+
+  end_round <- FALSE
+
   for (i in 1:nrow(board)) {
-    if (identical(as.vector(t(board[i,])), x_win_vector)) {
+    if (identical(as.vector(t(board[i, ])), x_win_vector)) {
       print("X wins!")
-      end_game <- TRUE
-    } else if (identical(as.vector(t(board[i,])), o_win_vector)) {
+      end_round <- TRUE
+      break
+    } else if (identical(as.vector(t(board[i, ])), o_win_vector)) {
       print("O wins!")
-      end_game <- TRUE
-    } else if (identical(board[,i], x_win_vector)) {
+      end_round <- TRUE
+      break
+    } else if (identical(board[, i], x_win_vector)) {
       print("X wins!")
-      end_game <- TRUE
-    } else if (identical(board[,i], o_win_vector)) {
+      end_round <- TRUE
+      break
+    } else if (identical(board[, i], o_win_vector)) {
       print("O wins!")
-      end_game <- TRUE
+      end_round <- TRUE
+      break
+    } else if (identical(c(board[1, 1], board[2, 2], board[3, 3]), x_win_vector) |
+      identical(c(board[1, 3], board[2, 2], board[3, 1]), x_win_vector)) {
+      print("X wins!")
+      end_round <- TRUE
+      break
+    } else if (identical(c(board[1, 1], board[2, 2], board[3, 3]), o_win_vector) |
+      identical(c(board[1, 3], board[2, 2], board[3, 1]), o_win_vector)) {
+      print("O wins!")
+      end_round <- TRUE
+      break
+    } else if (end_round == FALSE & length(empty_positions) == 0) {
+      print("It's a tie!")
+      end_round <- TRUE
+      break
     } else {
-      end_game <- FALSE
+      end_round <- FALSE
     }
   }
-  
-  if (identical(c(board[1,1], board[2,2], board[3,3]), x_win_vector) | 
-      identical(c(board[1,3], board[2,2], board[3,1]), x_win_vector)) {
-    print("X wins!")
-    end_game <- TRUE
-  } else if (identical(c(board[1,1], board[2,2], board[3,3]), o_win_vector) | 
-             identical(c(board[1,3], board[2,2], board[3,1]), o_win_vector)) {
-    print("O wins!")
-    end_game <- TRUE
-  } else if (end_game == FALSE & length(empty_positions)==0) {
-    print("It's a tie!")
-    end_game <- TRUE
-  }
-  
-  return(end_game)
+  return(end_round)
 }
 
 player_symbol <- get_symbol()
@@ -136,7 +148,6 @@ if (player_symbol == "X") {
     cat("Player X turn\n")
     board <- update_board_player()
     end_game <- check_winner()
-    print(end_game)
     if (end_game == FALSE) {
       cat("Player O turn\n")
       board <- update_board_comp()
