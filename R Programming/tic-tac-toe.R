@@ -33,19 +33,6 @@ get_symbol <- function() {
   return(symbol)
 }
 
-get_position <- function(row_or_col) {
-  cat(paste("Which ", row_or_col, "? "))
-
-  position <- readLines(con = con, n = 1)
-
-  while (position < 1 | position > 3) {
-    cat(paste("Invalid input. Which ", row_or_col, "? "))
-    position <- readLines(con = con, n = 1)
-    Sys.sleep(1)
-  }
-  return(position)
-}
-
 update_board_player <- function() {
   cat("Which row? ")
   row_position <- readLines(con = con, n = 1)
@@ -87,7 +74,7 @@ update_board_comp <- function() {
   #find which positions on the board are empty
   empty_positions <- which(board == "[ ]", arr.ind = TRUE)
   #choose an random position from the empty positions
-  random_position <- sample(empty_positions,1)
+  random_position <- sample(nrow(empty_positions),1)
   row_position <- empty_positions[random_position,][1]
   col_position <- empty_positions[random_position,][2]
   board[row_position, col_position] = comp_symbol
@@ -104,10 +91,10 @@ check_winner <- function() {
   empty_positions <- which(board == "[ ]", arr.ind = TRUE)
   
   for (i in 1:nrow(board)) {
-    if (identical(board[i,], x_win_vector)) {
+    if (identical(as.vector(t(board[i,])), x_win_vector)) {
       print("X wins!")
       end_game <- TRUE
-    } else if (identical(board[i,], o_win_vector)) {
+    } else if (identical(as.vector(t(board[i,])), o_win_vector)) {
       print("O wins!")
       end_game <- TRUE
     } else if (identical(board[,i], x_win_vector)) {
@@ -149,10 +136,12 @@ if (player_symbol == "X") {
     cat("Player X turn\n")
     board <- update_board_player()
     end_game <- check_winner()
+    print(end_game)
     if (end_game == FALSE) {
       cat("Player O turn\n")
       board <- update_board_comp()
       end_game <- check_winner()
+      print(end_game)
     }
   }
 } else {
