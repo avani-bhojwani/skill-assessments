@@ -20,11 +20,11 @@ if (interactive()) {
   con <- "stdin"
 }
 
-#function for asking player whether they want to be X or O
+# function for asking player whether they want to be X or O
 get_symbol <- function() {
   cat("X or O? ")
   symbol <- readLines(con = con, n = 1)
-  
+
   while (symbol != "X" & symbol != "O") {
     cat("Invalid input. X or O? ")
     symbol <- readLines(con = con, n = 1)
@@ -33,14 +33,14 @@ get_symbol <- function() {
   return(symbol)
 }
 
-#function for asking the player to choose a position for their turn
-#and updating the board with their input
+# function for asking the player to choose a position for their turn
+# and updating the board with their input
 update_board_player <- function() {
   cat("Which row? ")
   row_position <- readLines(con = con, n = 1)
   cat("Which column? ")
   col_position <- readLines(con = con, n = 1)
-  
+
   # check if row position or col position entered was empty
   if (is.null(row_position) | is.null(col_position)) {
     valid_position <- FALSE
@@ -75,8 +75,8 @@ update_board_player <- function() {
       valid_position <- FALSE
     }
   }
-  
-  #update board and show it
+
+  # update board and show it
   board[row_position, col_position] <- player_symbol
   Sys.sleep(1)
   cat("-------------\nCurrent Board\n-------------\n")
@@ -85,7 +85,7 @@ update_board_player <- function() {
   return(board)
 }
 
-#function for selecting a position for the computer's turn
+# function for selecting a position for the computer's turn
 update_board_comp <- function() {
   # find which positions on the board are empty
   empty_positions <- which(board == "[ ]", arr.ind = TRUE)
@@ -93,7 +93,7 @@ update_board_comp <- function() {
   random_position <- sample(nrow(empty_positions), 1)
   row_position <- empty_positions[random_position, ][1]
   col_position <- empty_positions[random_position, ][2]
-  #update board and show it
+  # update board and show it
   board[row_position, col_position] <- comp_symbol
   Sys.sleep(1)
   cat("-------------\nCurrent Board\n-------------\n")
@@ -102,8 +102,8 @@ update_board_comp <- function() {
   return(board)
 }
 
-#This function checks if someone has won by seeing if there are 3 symbols
-  #in a row on the board.
+# This function checks if someone has won by seeing if there are 3 symbols
+# in a row on the board.
 check_winner <- function() {
   x_win_vector <- c(rep("X", 3))
   o_win_vector <- c(rep("O", 3))
@@ -112,7 +112,7 @@ check_winner <- function() {
   end_round <- FALSE
 
   for (i in 1:nrow(board)) {
-    #checking across rows
+    # checking across rows
     if (identical(as.vector(t(board[i, ])), x_win_vector)) {
       print("X wins!")
       end_round <- TRUE
@@ -121,7 +121,7 @@ check_winner <- function() {
       print("O wins!")
       end_round <- TRUE
       break
-    #checking across columns
+      # checking across columns
     } else if (identical(board[, i], x_win_vector)) {
       print("X wins!")
       end_round <- TRUE
@@ -130,7 +130,7 @@ check_winner <- function() {
       print("O wins!")
       end_round <- TRUE
       break
-    #checking diagonally
+      # checking diagonally
     } else if (identical(c(board[1, 1], board[2, 2], board[3, 3]), x_win_vector) |
       identical(c(board[1, 3], board[2, 2], board[3, 1]), x_win_vector)) {
       print("X wins!")
@@ -141,7 +141,7 @@ check_winner <- function() {
       print("O wins!")
       end_round <- TRUE
       break
-    #checking if all positions are filled without a winner
+      # checking if all positions are filled without a winner
     } else if (end_round == FALSE & length(empty_positions) == 0) {
       print("It's a tie!")
       end_round <- TRUE
@@ -159,8 +159,8 @@ Sys.sleep(1)
 
 end_game <- FALSE
 
-#Player X always goes first, whether they are computer or human.
-#Players will alternate taking turns until there is a winner or tie.
+# Player X always goes first, whether they are computer or human.
+# Players will alternate taking turns until there is a winner or tie.
 if (player_symbol == "X") {
   comp_symbol <- "O"
   while (end_game == FALSE) {
