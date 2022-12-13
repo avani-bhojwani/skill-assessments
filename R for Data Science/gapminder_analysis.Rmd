@@ -1,0 +1,302 @@
+---
+title: "Gapminder Dataset Analysis"
+date: "Dec 13, 2022"
+output: html_document
+---
+
+<style type="text/css">
+  h1, h2, h3, h4 {
+    color: blue;
+    text-align: center;
+  }
+  body{
+  font-size: 12pt;
+  }
+</style>
+
+<center>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, message = FALSE,
+  warning = FALSE
+)
+```
+
+```{r}
+library(tidyverse)
+library(plotly)
+library(ggpubr)
+library(rstatix)
+library(DT)
+```
+
+```{r}
+gapminder <- read_csv("gapminder_clean.csv",
+  col_select = c(2:20),
+  col_names = c(
+    "row", "country", "year", "agriculture_value_added",
+    "co2_emissions", "domestic_credit_by_financial_sector",
+    "electric_power_consumption", "energy_use", "exports",
+    "fertility_rate", "GDP_growth", "imports",
+    "industry_value_added", "inflation", "life_expectancy",
+    "population_density", "services_value_added", "population",
+    "continent", "GDP_per_cap"
+  ), skip = 1
+)
+```
+
+### CO2 Emissions Versus GDP Per Capita In 1962
+
+```{r}
+gapminder_1962 <- gapminder %>%
+  filter(year == 1962)
+```
+
+```{r}
+ggplot(
+  gapminder_1962,
+  aes(x = GDP_per_cap, y = co2_emissions)
+) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(
+    title = "CO2 Emissions Versus GDP Per Capita in 1962",
+    y = "CO2 emissions \n (metric tons per capita)", x = "GDP per capita"
+  ) +
+  stat_cor()
+```
+
+The correlation between CO2 emissions and GDP per capita in 1962 was 
+0.86 with a p-value less than 2.2e-16.
+
+### CO2 Emissions Versus GDP Per Capita For All Years
+```{r}
+co2_gdp_corr <- gapminder %>%
+  group_by(year) %>%
+  summarise(
+    correlation = cor(co2_emissions, GDP_per_cap, use = "pairwise.complete.obs")
+  )
+
+viz <- ggplot(co2_gdp_corr, aes(x = year, y = correlation)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(
+    breaks = seq(1960, 2010, by = 5),
+    minor_breaks = seq(1960, 2010, by = 1)
+  ) +
+  labs(
+    title = "Correlation Between CO2 Emissions and GDP",
+    y = "Correlation", x = "Year"
+  )
+ggplotly(viz)
+```
+
+```{r}
+max_corr_year <- co2_gdp_corr %>%
+  filter(correlation == max(correlation)) %>%
+  select(year)
+```
+
+Correlation between CO2 emissions and GDP per capita was highest in `r max_corr_year`.
+
+### CO2 Emissions Versus GDP Per Capita In `r max_corr_year`
+
+```{r}
+gapminder_1967 <- gapminder %>%
+  filter(year == max_corr_year$year) %>%
+  select(co2_emissions, GDP_per_cap, population, continent) %>%
+  na.omit()
+```
+
+```{r}
+viz <- ggplot(
+  gapminder_1967,
+  aes(
+    x = GDP_per_cap, y = co2_emissions,
+    size = population, color = continent
+  )
+) +
+  geom_point() +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(
+    title = "CO2 Emissions vs GDP Per Capita in 1967",
+    y = "CO2 emissions (metric tons per capita)", x = "GDP per capita"
+  )
+ggplotly(viz)
+```
+
+### Energy Use By Continent
+
+Before comparing energy use in different continents, a quantile-quantile 
+plot was used to check the normality of energy use data.
+
+```{r}
+gapminder_continent <- gapminder %>%
+  select(energy_use, continent) %>%
+  na.omit() %>%
+  mutate(continent = as.factor(continent))
+
+model_energy_by_continent <- lm(energy_use ~ continent, data = gapminder_continent)
+
+# test for normality
+ggqqplot(residuals(model_energy_by_continent)) +
+  labs(
+    title = "Normality Q-Q Plot",
+    y = "Sample Quantiles", x = "Theoretical Quantiles"
+  )
+```
+
+Because the data was not normally distributed, a Kruskal-Wallis test
+and Wilcoxon test was used was used to compare the average energy 
+use in different continents.
+
+```{r}
+post_hoc_results <- pairwise_wilcox_test(gapminder_continent,
+  energy_use ~ continent,
+  paired = FALSE
+) %>%
+  filter(p.adj < 0.05) %>%
+  add_xy_position(x = "continent")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+gapminder_continent %>%
+  ggplot(aes(x = continent, y = energy_use)) +
+  geom_boxplot() +
+  stat_compare_means(
+    method = "kruskal.test",
+    label.x.npc = "left", label.y.npc = "top"
+  ) +
+  labs(
+    title = "Energy Use by Continent",
+    y = "Energy Use (kg of oil equivalent per capita)", x = "Continent"
+  ) +
+  stat_pvalue_manual(post_hoc_results)
+```
+
+### Imports In Europe & Asia After 1990
+
+A quantile-quantile plot was used to check the normality of imports data
+in Europe and Asia after 1990. The distribution was normal, so a t-test
+was used.
+
+```{r}
+imports_eu_asia <- gapminder %>%
+  filter(continent == "Europe" | continent == "Asia") %>%
+  filter(year > 1990) %>%
+  select(continent, imports) %>%
+  na.omit()
+
+# check if distribution is normal
+ggqqplot(imports_eu_asia, "imports")
+```
+
+```{r}
+imports_eu_asia %>%
+  ggplot(aes(x = continent, y = imports)) +
+  geom_boxplot() +
+  labs(
+    title = "Imports By Europe And Asia After 1990",
+    y = "Imports of goods and services (% of GDP)", x = "Continent"
+  ) +
+  stat_compare_means(
+    method = "t.test",
+    label.x.npc = "centre", label.y.npc = "top"
+  )
+```
+
+There was no significant difference between Europe and Asia (p>0.05) 
+with respect to the percentage of GDP that accounts for imports of
+goods and services.
+
+### Countries With High Population Density
+
+```{r}
+# top 5 countries with high population density
+high_pop_density <- gapminder %>%
+  select(country, population_density) %>%
+  na.omit() %>%
+  mutate(country = as.factor(country)) %>%
+  group_by(country) %>%
+  summarise(population_density = mean(population_density, na.rm = TRUE)) %>%
+  arrange(desc(population_density)) %>%
+  head(5)
+
+# raw data for countries with high population density
+gapminder_pop_density <- gapminder %>%
+  filter(country %in% high_pop_density$country) %>%
+  select(country, population_density) %>%
+  na.omit() %>%
+  mutate(country = as.factor(country))
+```
+
+A quantile-quantile plot was used to check the normality of population 
+density data for the top 5 countries. 
+
+```{r}
+model_pop_density_by_country <- lm(population_density ~ country,
+  data = gapminder_pop_density
+)
+
+# test for normality
+ggqqplot(residuals(model_pop_density_by_country))
+# the distribution is normal
+```
+
+As the distribution was normal, a one-way ANOVA and Tukey's HSD test 
+was used to compare the average population density in different countries.
+
+```{r}
+tukey_pop_density <- aov(population_density ~ country,
+  data = gapminder_pop_density
+) %>%
+  tukey_hsd() %>%
+  filter(p.adj < 0.05)
+```
+
+```{r}
+gapminder_pop_density %>%
+  ggplot(aes(x = country, y = population_density)) +
+  geom_boxplot() +
+  labs(
+    title = "Population Density By Country",
+    y = "Population Density (people per sq. km of land area)", x = "Country"
+  ) +
+  stat_compare_means(
+    method = "anova",
+    label.x.npc = "left", label.y.npc = "top"
+  ) +
+  stat_pvalue_manual(tukey_pop_density,
+    y.position = c(25000, 27000, 29000, 31000, 33000, 35000)
+  )
+```
+
+### Countries With The Greatest Increase In Life Expectancy
+
+The country with the greatest increase in life expectancy since 1962
+was Cambodia.
+
+```{r}
+# top 5 countries with greatest increase in life expectancy
+top_life_exp_diff <- gapminder %>%
+  filter(year >= 1962) %>%
+  group_by(country) %>%
+  summarise(
+    life_expectancy_diff =
+      round(max(life_expectancy) - min(life_expectancy), 2)
+  ) %>%
+  arrange(desc(life_expectancy_diff)) %>%
+  head(5)
+
+datatable(top_life_exp_diff,
+  colnames = c("Country", "Increase In Life Expectancy (Years)"),
+  options = list(dom = "t"), # only shows table, not filters
+  width = "50%"
+)
+```
+
+</center>
