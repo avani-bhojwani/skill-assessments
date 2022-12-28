@@ -1,0 +1,300 @@
+---
+title: "Ewing Sarcoma Gene Suppression RNA-Seq Analysis"
+date: "Dec 28, 2022"
+output:
+    html_document:
+        theme: paper
+        toc: true
+        toc_float: true
+---
+
+<style type="text/css">
+  h1, h2, h3, h4 {
+    color: #2196F3;
+    text-align: center;
+  }
+  body{
+  font-size: 12pt;
+  }
+</style>
+
+<center>
+
+Ewing sarcoma is a pediatric bone cancer which arises from the fusion 
+of the EWSR1 and FLI1 genes ("EWSR1-FLI1" fusion oncogene). Recently, 
+some have proposed therapies for Ewing sarcoma which suppress EWSR1-FLI1. 
+This RNA-Seq analysis compares gene expression in an Ewing sarcoma cell 
+line with and without EWS-FLI knockdown.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(DESeq2)
+library(DT)
+library(EnsDb.Hsapiens.v86)
+library(EnhancedVolcano)
+library(pheatmap)
+library(msigdbr)
+library(clusterProfiler)
+```
+
+```{r}
+# read in data
+rse <- readRDS("EwS.rds")
+
+# create DESeq data set
+dds <- DESeqDataSet(rse, design = ~condition)
+```
+
+## Principal Components Plot
+
+Data was first normalised using regularised log transformation (rlog). 
+This was used to plot the first two principal components (PCs). The
+first PC separates the two conditions. This shows that a lot of the 
+variation in gene expression in the dataset can likely be explained 
+by the differences between experimental conditions and there are
+no other major sources of variation in the data that need to be
+accounted for.
+
+```{r}
+# normalise data and plot PCA
+rld <- rlog(dds)
+plotPCA(rld)
+```
+
+```{r}
+# perform differential gene expression analysis
+dds <- DESeq(dds)
+
+# get results
+res <- results(dds, contrast = c("condition", "shEF1", "shCTR"))
+```
+
+## MA Plot
+
+To perform differential gene expression analysis, raw counts for
+each gene were fit to the DESeq negative binomial model. An MA 
+plot was produced to visualise the results. The MA plot shows
+the average expression of each gene versus the log2 fold change.
+The points are coloured blue if the adjusted p-value is less than
+0.1. Log fold change (LFC) shrinkage was performed using the apeglm
+method. This method is designed to reduce the bias in log fold
+change estimates caused by low average expression levels. 
+
+```{r}
+plotMA(res, ylim = c(-4, 4), main = "MA Plot")
+
+# LFC shrink
+res_norm <- lfcShrink(
+  dds = dds, res = res,
+  type = "apeglm", coef = 2
+)
+plotMA(res_norm, ,
+  ylim = c(-4, 4),
+  main = "MA Plot (LFC shrink with apeglm)"
+)
+```
+
+## Differentially Expressed Genes
+
+Differentially expressed genes were defined as those with an adjusted
+p-value less than 0.01, a log2 fold change of at least 1, and an average
+expression level of at least 20 counts. A table of the resulting 
+differentially expressed genes is shown below.
+
+```{r}
+# make dataframe
+res_df <- as.data.frame(res_norm)
+
+# convert ENSG to gene symbol
+ENS_to_symbol <- AnnotationDbi::select(EnsDb.Hsapiens.v86,
+  keys = keys(EnsDb.Hsapiens.v86),
+  columns = c("SYMBOL", "ENTREZID")
+)
+
+# join res_df with ENS_to_symbol
+res_df <- res_df %>%
+  rownames_to_column() %>%
+  # remove version number from ENSG
+  mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) %>%
+  dplyr::select(-rowname) %>%
+  inner_join(y = ENS_to_symbol, by = "GENEID") %>%
+  dplyr::select(GENEID, SYMBOL, ENTREZID, everything()) # reorder columns
+
+# get significant results
+idx <- which(res_df$padj < 0.01 & # (adjusted p-value threshold)
+  abs(res_df$log2FoldChange) >= 1 & # (at least 2 fold)
+  res_df$baseMean >= 20) # (average expression level (at least 20 counts))
+sig_res <- res_df[idx, ]
+
+sig_res_clean <- sig_res %>%
+  dplyr::select(SYMBOL, log2FoldChange, pvalue, padj, baseMean) %>%
+  arrange(desc(padj)) %>%
+  mutate_at(vars(pvalue, padj), formatC, format = "e", digits = 2) %>%
+  mutate_at(vars(log2FoldChange, baseMean), round, 2)
+
+# use DT to create table
+datatable(sig_res_clean,
+  options = list(pageLength = 10),
+  colnames = c(
+    "Gene Symbol", "log 2 fold change",
+    "Wald test p-value", "BH adjusted p-value", "Mean of normalised counts"
+  )
+)
+```
+
+## Volcano Plot
+
+A volcano plot was created to look at the distribution of fold changes
+relative to the adjusted p-value.
+
+```{r}
+EnhancedVolcano(res_df,
+  lab = res_df$SYMBOL, pCutoff = 1e-100,
+  FCcutoff = 3, x = "log2FoldChange", y = "padj",
+  title = "Control vs EWS-FLI knockdown"
+)
+```
+
+## Top 20 Differentially Expressed Genes
+
+The heatmap below looks at the top 10 over-expressed genes and
+the top 10 under-expressed genes based on log2 fold change obtained
+after LFC shrinkage. rlog normalised counts for each gene were used. 
+
+```{r}
+# top 10 over-expressed genes
+top10_over <- sig_res %>%
+  arrange(desc(log2FoldChange)) %>%
+  head(10)
+
+# top 10 under-expressed genes
+top10_under <- sig_res %>%
+  arrange(log2FoldChange) %>%
+  head(10)
+
+top20 <- rbind(top10_over, top10_under)
+
+# subset the top20 genes from the normalised counts
+id1 <- top20$GENEID
+id2 <- top20$SYMBOL
+
+normalised_counts <- assay(rld) %>%
+  as.data.frame() %>%
+  rownames_to_column() %>%
+  mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) %>%
+  dplyr::select(-rowname) %>%
+  dplyr::distinct(GENEID, .keep_all = TRUE) %>%
+  tibble::column_to_rownames("GENEID")
+
+topDE <- normalised_counts[id1, ]
+rownames(topDE) <- id2
+
+# create a dataframe with the condition annotation
+condition_annotation <- colData(rse)$condition %>%
+  as.data.frame()
+colnames(condition_annotation) <- "condition"
+row.names(condition_annotation) <- colnames(topDE)
+
+pheatmap(topDE,
+  cluster_rows = T,
+  annotation_col = condition_annotation,
+  scale = "row",
+  main = "Top 20 Differentially Expressed genes"
+)
+```
+
+## Gene Set Enrichment Analysis
+
+Gene Set Enrichment Analysis (GSEA) was performed to identify enriched
+gene sets in KEGG pathways. The GSEA metric was calculated as follows:
+gsea metric = -log10(padj) * sign(log2FoldChange).
+The results of the GSEA analysis are shown in the table below.
+
+```{r}
+# Deal with infinity values of pajd and add GSEA score
+res_for_gsea <- res_df %>%
+  mutate(padj = case_when(
+    padj == 0 ~ .Machine$double.xmin,
+    TRUE ~ padj
+  )) %>%
+  mutate(gsea_metric = -log10(padj) * sign(log2FoldChange)) %>%
+  filter(!is.na(gsea_metric)) %>%
+  arrange(desc(gsea_metric))
+
+# Get the ranked GSEA vector
+ranks <- res_for_gsea %>%
+  select(ENTREZID, gsea_metric) %>%
+  distinct(ENTREZID, .keep_all = TRUE) %>%
+  deframe()
+
+# Run GSEA
+gsea_res <- gseKEGG(ranks, organism = "hsa")
+gsea_res_df <- as.data.frame(gsea_res)
+```
+
+```{r}
+gsea_res_clean <- gsea_res_df %>%
+  dplyr::select(ID, Description, setSize, enrichmentScore, NES, pvalue, p.adjust) %>%
+  rownames_to_column() %>%
+  dplyr::select(-rowname) %>%
+  column_to_rownames("ID") %>%
+  arrange(desc(NES)) %>%
+  mutate_at(vars(pvalue, p.adjust), formatC, format = "e", digits = 2) %>%
+  mutate_at(vars(enrichmentScore, NES), round, 2)
+
+# use DT to create table
+datatable(gsea_res_clean,
+  options = list(pageLength = 10),
+  colnames = c(
+    "Pathway", "Gene Set Size", "Enrichment Score",
+    "Normalised Enrichment Score", "p-value", "BH adjusted p-value"
+  )
+)
+```
+
+### Top 4 over-expressed pathways
+
+The top 4 over-expressed pathways based on normalised enrichment score (NES)
+are shown below.
+
+```{r results=FALSE}
+# Get top 4 over-expressed pathways
+top_pathway_IDs <- gsea_res_df %>%
+  top_n(n = 4, wt = NES) %>%
+  pull(ID)
+
+# Make gseaplot for each and return as list
+top_pathway_plots <- lapply(top_pathway_IDs, function(ID) {
+  gseaplot(gsea_res, geneSetID = ID, title = gsea_res[ID, "Description"])
+})
+
+top_pathway_plots
+```
+
+### Bottom 4 under-expressed pathways
+
+The top 4 under-expressed pathways with the lowest NES are shown below.
+
+```{r results=FALSE}
+# Repeat steps with top 4 under-expressed pathways
+bottom_pathway_IDs <- gsea_res_df %>%
+  top_n(n = 4, wt = -NES) %>%
+  pull(ID)
+
+bottom_pathway_plots <- lapply(bottom_pathway_IDs, function(ID) {
+  gseaplot(gsea_res, geneSetID = ID, title = gsea_res[ID, "Description"])
+})
+
+bottom_pathway_plots
+```
+
+<center>
