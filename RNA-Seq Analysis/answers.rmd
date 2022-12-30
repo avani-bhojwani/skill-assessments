@@ -90,16 +90,18 @@ method. This method is designed to reduce the bias in log fold
 change estimates caused by low average expression levels. 
 
 ```{r}
+# plot MA plot with and without LFC shrink side by side
+par(mfrow = c(1, 2))
+
 plotMA(res, ylim = c(-4, 4), main = "MA Plot")
 
-# LFC shrink
 res_norm <- lfcShrink(
   dds = dds, res = res,
   type = "apeglm", coef = 2
 )
 plotMA(res_norm, ,
   ylim = c(-4, 4),
-  main = "MA Plot (LFC shrink with apeglm)"
+  main = "MA Plot \n(LFC shrink with apeglm)"
 )
 ```
 
@@ -261,6 +263,38 @@ datatable(gsea_res_clean,
 )
 ```
 
+```{r}
+# function for plotting gsea results from a list containing 4 pathways
+gsea_multiplot <- function(pathways_id_list) {
+  gsea_plots_list <- list()
+
+  # gseaplot creates 2 plots for each pathway
+  # first we store the plots in a list of lists
+  # i.e. gsea_plots_list[[1]] = list of plots for pathway 1 which contains 2 plots
+  for (ID in pathways_id_list) {
+    p <- gseaplot(gsea_res, geneSetID = ID, title = gsea_res[ID, "Description"])
+    p[[1]] <- p[[1]] + ylab("Ranked \nList Metric")
+    p[[2]] <- p[[2]] + ylab("Running \nEnrichment Score")
+    p <- ggpar(p,
+      font.main = c(9, "bold"),
+      font.axis = 10, font.x = 10, font.y = 10, font.tickslab = 8
+    )
+    gsea_plots_list[[ID]] <- p
+  }
+
+  # both plots for each pathway are arranged in 1 column
+  paired_plots <- lapply(1:4, function(i) {
+    ggarrange(plotlist = gsea_plots_list[[i]], nrow = 2, ncol = 1)
+  })
+
+  # the 4 pathways are arranged in a 2x2 grid
+  ggarrange(
+    plotlist = paired_plots,
+    nrow = 2, ncol = 2, labels = "AUTO", font.label = 10
+  )
+}
+```
+
 ### Top 4 over-expressed pathways
 
 The top 4 over-expressed pathways based on normalised enrichment score (NES)
@@ -272,12 +306,8 @@ top_pathway_IDs <- gsea_res_df %>%
   top_n(n = 4, wt = NES) %>%
   pull(ID)
 
-# Make gseaplot for each and return as list
-top_pathway_plots <- lapply(top_pathway_IDs, function(ID) {
-  gseaplot(gsea_res, geneSetID = ID, title = gsea_res[ID, "Description"])
-})
-
-top_pathway_plots
+# Plot the top 4 over-expressed pathways
+gsea_multiplot(top_pathway_IDs)
 ```
 
 ### Bottom 4 under-expressed pathways
@@ -290,11 +320,7 @@ bottom_pathway_IDs <- gsea_res_df %>%
   top_n(n = 4, wt = -NES) %>%
   pull(ID)
 
-bottom_pathway_plots <- lapply(bottom_pathway_IDs, function(ID) {
-  gseaplot(gsea_res, geneSetID = ID, title = gsea_res[ID, "Description"])
-})
-
-bottom_pathway_plots
+gsea_multiplot(bottom_pathway_IDs)
 ```
 
 <center>
