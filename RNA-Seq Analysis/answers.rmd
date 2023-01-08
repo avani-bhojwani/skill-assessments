@@ -3,6 +3,7 @@ title: "Ewing Sarcoma Gene Suppression RNA-Seq Analysis"
 date: "Dec 28, 2022"
 output:
     html_document:
+        code_folding: hide
         theme: paper
         toc: true
         toc_float: true
@@ -11,14 +12,11 @@ output:
 <style type="text/css">
   h1, h2, h3, h4 {
     color: #2196F3;
-    text-align: center;
   }
   body{
   font-size: 12pt;
   }
 </style>
-
-<center>
 
 Ewing sarcoma is a pediatric bone cancer which arises from the fusion 
 of the EWSR1 and FLI1 genes ("EWSR1-FLI1" fusion oncogene). Recently, 
@@ -28,13 +26,13 @@ line with and without EWS-FLI knockdown.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
-  echo = FALSE,
+  echo = TRUE,
   message = FALSE,
   warning = FALSE
 )
 ```
 
-```{r}
+```{r, echo = FALSE}
 library(tidyverse)
 library(ggpubr)
 library(DESeq2)
@@ -67,7 +65,8 @@ accounted for.
 ```{r}
 # normalise data and plot PCA
 rld <- rlog(dds)
-plotPCA(rld)
+plotPCA(rld) +
+  coord_fixed(ratio = 5, ylim = c(-6, 6))
 ```
 
 ```{r}
@@ -75,7 +74,10 @@ plotPCA(rld)
 dds <- DESeq(dds)
 
 # get results
-res <- results(dds, contrast = c("condition", "shEF1", "shCTR"))
+res <- results(dds,
+  contrast = c("condition", "shEF1", "shCTR"),
+  alpha = 0.01
+)
 ```
 
 ## MA Plot
@@ -85,7 +87,7 @@ each gene were fit to the DESeq negative binomial model. An MA
 plot was produced to visualise the results. The MA plot shows
 the average expression of each gene versus the log2 fold change.
 The points are coloured blue if the adjusted p-value is less than
-0.1. Log fold change (LFC) shrinkage was performed using the apeglm
+0.01. Log fold change (LFC) shrinkage was performed using the apeglm
 method. This method is designed to reduce the bias in log fold
 change estimates caused by low average expression levels. 
 
@@ -99,7 +101,7 @@ res_norm <- lfcShrink(
   dds = dds, res = res,
   type = "apeglm", coef = 2
 )
-plotMA(res_norm, ,
+plotMA(res_norm,
   ylim = c(-4, 4),
   main = "MA Plot \n(LFC shrink with apeglm)"
 )
@@ -132,10 +134,10 @@ res_df <- res_df %>%
   dplyr::select(GENEID, SYMBOL, ENTREZID, everything()) # reorder columns
 
 # get significant results
-idx <- which(res_df$padj < 0.01 & # (adjusted p-value threshold)
-  abs(res_df$log2FoldChange) >= 1 & # (at least 2 fold)
-  res_df$baseMean >= 20) # (average expression level (at least 20 counts))
-sig_res <- res_df[idx, ]
+sig_res <- res_df %>%
+  filter(padj < 0.01 & # (adjusted p-value threshold)
+    abs(log2FoldChange) >= 1 & # (at least 2 fold)
+    baseMean >= 20) # (average expression level (at least 20 counts))
 
 sig_res_clean <- sig_res %>%
   dplyr::select(SYMBOL, log2FoldChange, pvalue, padj, baseMean) %>%
@@ -158,10 +160,10 @@ datatable(sig_res_clean,
 A volcano plot was created to look at the distribution of fold changes
 relative to the adjusted p-value.
 
-```{r}
+```{r, fig.height = 8}
 EnhancedVolcano(res_df,
-  lab = res_df$SYMBOL, pCutoff = 1e-100,
-  FCcutoff = 3, x = "log2FoldChange", y = "padj",
+  lab = res_df$SYMBOL, pCutoff = 0.01,
+  FCcutoff = 1, x = "log2FoldChange", y = "padj",
   title = "Control vs EWS-FLI knockdown"
 )
 ```
@@ -322,5 +324,3 @@ bottom_pathway_IDs <- gsea_res_df %>%
 
 gsea_multiplot(bottom_pathway_IDs)
 ```
-
-<center>
