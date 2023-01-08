@@ -42,11 +42,15 @@ update_board_player <- function() {
   col_position <- readLines(con = con, n = 1)
 
   # check if row position or col position entered was empty
-  if (is.null(row_position) | is.null(col_position)) {
+  if (row_position == "" | col_position == "") {
+    valid_position <- FALSE
+    # check if input is numeric
+  } else if (is.na(suppressWarnings(as.numeric(row_position))) |
+    is.na(suppressWarnings(as.numeric(col_position)))) {
     valid_position <- FALSE
     # check if position entered is outside the range of the board
     # i.e. not within the 3x3 dataframe
-  } else if (is.null(board[row_position, col_position])) {
+  } else if (row_position > nrow(board) | col_position > ncol(board)) {
     valid_position <- FALSE
     # check if position entered is empty on the board
   } else if (board[row_position, col_position] == "[ ]") {
@@ -62,11 +66,15 @@ update_board_player <- function() {
     cat("Which column? ")
     col_position <- readLines(con = con, n = 1)
     # check if row position or col position entered was empty
-    if (is.null(row_position) | is.null(col_position)) {
+    if (row_position == "" | col_position == "") {
+      valid_position <- FALSE
+      # check if input is numeric
+    } else if (is.na(suppressWarnings(as.numeric(row_position))) |
+      is.na(suppressWarnings(as.numeric(col_position)))) {
       valid_position <- FALSE
       # check if position entered is outside the range of the board
       # i.e. not within the 3x3 dataframe
-    } else if (is.null(board[row_position, col_position])) {
+    } else if (row_position > nrow(board) | col_position > ncol(board)) {
       valid_position <- FALSE
       # check if position entered is empty on the board
     } else if (board[row_position, col_position] == "[ ]") {
@@ -142,7 +150,7 @@ check_winner <- function() {
       end_round <- TRUE
       break
       # checking if all positions are filled without a winner
-    } else if (end_round == FALSE & length(empty_positions) == 0) {
+    } else if (i == 3 & end_round == FALSE & length(empty_positions) == 0) {
       print("It's a tie!")
       end_round <- TRUE
       break
