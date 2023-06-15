@@ -2,4 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
+.vscode/
+*/.ipynb_checkpoints
 /R for Data Science/extra_code.txt
