@@ -1,0 +1,72 @@
+---
+title: "Mutation Annotation Format (MAF)"
+date: "2023-06-24"
+output: 
+  html_document:
+    theme: paper
+    toc: true
+    toc_float: true
+---
+
+<style type="text/css">
+  h1, h2, h3, h4 {
+    color: #2196F3;
+    text-align: center;
+  }
+  body{
+  font-size: 12pt;
+  }
+</style>
+
+<center>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, message = FALSE,
+  warning = FALSE
+)
+```
+
+```{r}
+library(maftools)
+library(ggplot2)
+library(DT)
+```
+
+### The Cancer Genome Atlas (TCGA) Cohorts
+```{r}
+# view available TCGA cohorts, check that LGG is there
+tcga_info <- as.data.frame(tcgaAvailable())
+datatable(tcga_info) 
+
+```
+
+### Exploring one of the TCGA cohorts - Low Grade Glioma (LGG)
+```{r}
+# load the available LGG cohort
+lgg <- tcgaLoad(study = "LGG")
+
+print(lgg)
+```
+
+### Oncoplot for top 5 mutated genes
+
+```{r}
+#oncoplot for top five mutated genes
+oncoplot(maf = lgg, top = 5)
+```
+
+### Transitions and transversions
+
+```{r}
+# classifying SNPs into transitions and transversions
+lgg.titv <- titv(maf = lgg)
+```
+
+### Mutation load in LGG cohort versus other TCGA cohorts
+
+```{r}
+lgg.mutload = tcgaCompare(maf=lgg)
+```
+
+</center>
